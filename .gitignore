@@ -11,6 +11,7 @@
 
 SegAL_VLM_LoveDA/data/
 SegAL_VLM_LoveDA/experiments/
+SegAL_VLM_LoveDA/visualization_result*.png
 
 **/*.pth
 **/*.pt
