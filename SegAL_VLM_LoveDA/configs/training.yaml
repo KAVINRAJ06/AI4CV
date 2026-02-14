@@ -1,0 +1,25 @@
+training:
+  batch_size: 4
+  learning_rate: 3.0e-5
+  weight_decay: 5.0e-4
+  num_epochs: 20
+  device: "cuda"
+  num_workers: 2
+  backbone_lr_mult: 0.1
+  freeze_backbone_epochs: 1
+  label_smoothing: 0.05
+  early_stopping:
+    patience: 5
+    min_delta: 0.0
+  
+  optimizer:
+    type: "adamw"
+    
+  scheduler:
+    type: "cosine_annealing"
+    T_max: 20
+    
+  logging:
+    use_wandb: false
+    log_interval: 10
+    save_dir: "experiments/checkpoints"
