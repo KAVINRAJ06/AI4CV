@@ -7,7 +7,9 @@ training:
   num_workers: 2
   backbone_lr_mult: 0.1
   freeze_backbone_epochs: 1
-  label_smoothing: 0.05
+  label_smoothing: 0.0
+  focal_gamma: 2.0
+  class_weights: [0.5, 1.0, 1.0, 1.2, 3.0, 1.5, 1.0]
   early_stopping:
     patience: 5
     min_delta: 0.0

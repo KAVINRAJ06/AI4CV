@@ -10,6 +10,7 @@ active_learning:
     smooth_kernel: 7
     smooth_sigma: 2.0
     query_ratio: 1.0
+    balance_domains: true
     
   oracle:
     type: "machine" # or "hybrid"

@@ -94,7 +94,19 @@ class ActiveLearningLoop:
         
         # Loss
         label_smoothing = float(self.train_config.get('training', {}).get('label_smoothing', 0.0))
-        self.criterion = SegLoss(num_classes=7, ignore_index=255, label_smoothing=label_smoothing).to(self.device)
+        focal_gamma = float(self.train_config.get('training', {}).get('focal_gamma', 0.0))
+        class_weights = self.train_config.get('training', {}).get('class_weights', None)
+        if isinstance(class_weights, (list, tuple)):
+            class_weights = [float(x) for x in class_weights]
+        else:
+            class_weights = None
+        self.criterion = SegLoss(
+            num_classes=7,
+            ignore_index=255,
+            label_smoothing=label_smoothing,
+            class_weights=class_weights,
+            focal_gamma=focal_gamma
+        ).to(self.device)
         
         # Components
         strategy_cfg = (self.al_config.get('active_learning', {}) or {}).get('strategy', {}) or {}
@@ -304,9 +316,31 @@ class ActiveLearningLoop:
 
         if not scored:
             return 0
-
+        
         scored.sort(key=lambda x: x[3], reverse=True)
-        selected = scored[:max(0, min(int(top_k), len(scored)))]
+        k = max(0, min(int(top_k), len(scored)))
+        balance_domains = bool(strategy_cfg.get('balance_domains', False))
+        if balance_domains and k > 0:
+            by_domain = {}
+            for s in scored:
+                by_domain.setdefault(s[2], []).append(s)
+            domains = [d for d in by_domain.keys() if d]
+            if len(domains) >= 2:
+                per = k // len(domains)
+                selected = []
+                for d in domains:
+                    selected.extend(by_domain[d][:per])
+                rem = k - len(selected)
+                if rem > 0:
+                    leftovers = []
+                    for d in domains:
+                        leftovers.extend(by_domain[d][per:])
+                    leftovers.sort(key=lambda x: x[3], reverse=True)
+                    selected.extend(leftovers[:rem])
+            else:
+                selected = scored[:k]
+        else:
+            selected = scored[:k]
 
         moved = 0
         for image_path, image_name, domain_name, _ in selected:
