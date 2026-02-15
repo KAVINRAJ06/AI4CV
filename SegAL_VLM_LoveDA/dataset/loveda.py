@@ -195,15 +195,26 @@ class LoveDADataset(Dataset):
             if self.transform:
                 image = self.transform(image)
             
-        text_prompts = [
-            "background",
-            "buildings",
-            "roads",
-            "water bodies",
-            "barren land",
-            "forest",
-            "agricultural fields"
-        ]
+        text_prompts = None
+        if isinstance(self.prompts, dict) and len(self.prompts) > 0:
+            ordered = []
+            for i in range(6):
+                v = self.prompts.get(str(i))
+                if isinstance(v, str) and v.strip():
+                    ordered.append(v.strip())
+            if len(ordered) == 6:
+                text_prompts = ["background"] + ordered
+
+        if text_prompts is None:
+            text_prompts = [
+                "background",
+                "buildings",
+                "roads",
+                "water bodies",
+                "barren land",
+                "forest",
+                "agricultural fields"
+            ]
 
         return {
             "image": image,

@@ -5,7 +5,7 @@ model:
     freeze_backbone: false
     unfreeze_last_n_blocks: 0
     drop_rate: 0.0
-    drop_path_rate: 0.1
+    drop_path_rate: 0.2
   
   text_encoder:
     type: "clip"
@@ -13,19 +13,19 @@ model:
     freeze_text_encoder: true
 
   prompt_encoder:
-    dropout: 0.0
+    dropout: 0.1
     
   decoder:
     type: "unet"
     num_classes: 7
     hidden_dim: 512
-    dropout: 0.2
+    dropout: 0.3
     unet_width: 256
     unet_depth: 4
     
   cross_attention:
     num_heads: 8
-    dropout: 0.1
+    dropout: 0.2
 
 hyperparameters:
   image_size: 512
