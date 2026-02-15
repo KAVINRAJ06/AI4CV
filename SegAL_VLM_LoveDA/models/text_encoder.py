@@ -29,18 +29,21 @@ class TextEncoder(nn.Module):
 
         inputs = self.processor(text=list(text_prompts), return_tensors="pt", padding=True).to(device)
         with torch.no_grad():
-            outputs = self.model(**inputs)
-            if hasattr(outputs, "text_embeds") and outputs.text_embeds is not None:
-                text_features = outputs.text_embeds
-            elif hasattr(outputs, "pooler_output") and outputs.pooler_output is not None:
-                text_features = outputs.pooler_output
-            else:
-                text_features = self.model.get_text_features(**inputs)
+            text_inputs = {k: v for k, v in inputs.items() if k in ("input_ids", "attention_mask", "position_ids")}
+            text_features = self.model.get_text_features(**text_inputs)
             if not isinstance(text_features, torch.Tensor):
-                if hasattr(text_features, "text_embeds") and getattr(text_features, "text_embeds") is not None:
-                    text_features = text_features.text_embeds
-                elif hasattr(text_features, "pooler_output") and getattr(text_features, "pooler_output") is not None:
-                    text_features = text_features.pooler_output
+                if hasattr(text_features, "pooler_output") and text_features.pooler_output is not None:
+                    pooled = text_features.pooler_output
+                elif hasattr(text_features, "last_hidden_state") and text_features.last_hidden_state is not None:
+                    pooled = text_features.last_hidden_state[:, 0, :]
+                else:
+                    raise TypeError(f"Unexpected text feature output type: {type(text_features)}")
+
+                if hasattr(self.model, "text_projection") and self.model.text_projection is not None:
+                    pooled = self.model.text_projection(pooled)
+                text_features = pooled
+
+            text_features = text_features / text_features.norm(dim=-1, keepdim=True).clamp_min(1e-12)
         text_features = text_features.detach()
         self._cache_key = key
         self._cache_value = text_features
