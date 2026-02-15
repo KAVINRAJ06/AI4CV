@@ -28,7 +28,19 @@ class TextEncoder(nn.Module):
             return self._cache_value
 
         inputs = self.processor(text=list(text_prompts), return_tensors="pt", padding=True).to(device)
-        text_features = self.model.get_text_features(**inputs)
+        with torch.no_grad():
+            outputs = self.model(**inputs)
+            if hasattr(outputs, "text_embeds") and outputs.text_embeds is not None:
+                text_features = outputs.text_embeds
+            elif hasattr(outputs, "pooler_output") and outputs.pooler_output is not None:
+                text_features = outputs.pooler_output
+            else:
+                text_features = self.model.get_text_features(**inputs)
+            if not isinstance(text_features, torch.Tensor):
+                if hasattr(text_features, "text_embeds") and getattr(text_features, "text_embeds") is not None:
+                    text_features = text_features.text_embeds
+                elif hasattr(text_features, "pooler_output") and getattr(text_features, "pooler_output") is not None:
+                    text_features = text_features.pooler_output
         text_features = text_features.detach()
         self._cache_key = key
         self._cache_value = text_features
