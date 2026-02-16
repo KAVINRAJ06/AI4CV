@@ -60,7 +60,8 @@ class ActiveLearningLoop:
             split='train', 
             prompt_file='dataset/prompts.json',
             transform=self.transform,
-            img_size=(512, 512)
+            img_size=(512, 512),
+            augment=False
         )
         self.val_dataset = LoveDADataset(
             root_dir='data/LoveDA', 
@@ -199,7 +200,7 @@ class ActiveLearningLoop:
             transform=self.transform,
             img_size=(512, 512),
             require_mask=True,
-            augment=True
+            augment=False
         )
         self.pool_unlabeled_infer_dataset = LoveDADataset(
             root_dir=self.pool_root,
@@ -217,7 +218,7 @@ class ActiveLearningLoop:
             transform=self.transform,
             img_size=(512, 512),
             require_mask=True,
-            augment=True
+            augment=False
         )
         self._pool_unlabeled_path_to_index = {p: i for i, p in enumerate(getattr(self.pool_unlabeled_infer_dataset, "image_paths", []))}
 
@@ -230,7 +231,7 @@ class ActiveLearningLoop:
         prompts = batch.get("text_prompts", None)
         if prompts is None:
             return [
-                "background",
+                "satellite aerial view background and other land cover",
                 "buildings",
                 "roads",
                 "water bodies",

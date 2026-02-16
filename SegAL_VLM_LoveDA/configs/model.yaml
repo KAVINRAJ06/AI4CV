@@ -1,11 +1,11 @@
 model:
   vision_encoder:
-    type: "vit_base_patch16_224" # or dinov2_vits14
+    type: "vit_large_patch16_224"
     pretrained: true
     freeze_backbone: false
     unfreeze_last_n_blocks: 0
     drop_rate: 0.0
-    drop_path_rate: 0.2
+    drop_path_rate: 0.3
   
   text_encoder:
     type: "clip"
@@ -18,13 +18,14 @@ model:
   decoder:
     type: "unet"
     num_classes: 7
-    hidden_dim: 512
-    dropout: 0.3
-    unet_width: 256
-    unet_depth: 4
+    hidden_dim: 768
+    dropout: 0.2
+    unet_width: 512
+    unet_depth: 5
+    use_skips: true
     
   cross_attention:
-    num_heads: 8
+    num_heads: 12
     dropout: 0.2
 
 hyperparameters:

@@ -97,12 +97,81 @@ class StrongUNetDecoder(nn.Module):
         x = F.interpolate(x, size=(target_h, target_w), mode='bilinear', align_corners=False)
         return x
 
-def build_decoder(decoder_cfg, hidden_dim, num_classes):
+class StrongUNetDecoderWithSkips(nn.Module):
+    def __init__(self, hidden_dim, num_classes, width=256, depth=4, dropout=0.0, skip_channels=None):
+        super().__init__()
+        width = int(width)
+        depth = int(depth)
+        width = max(32, width)
+        depth = max(1, depth)
+        self.depth = depth
+        self.num_classes = int(num_classes)
+
+        self.stem = nn.Conv2d(int(hidden_dim), width, kernel_size=1, bias=False)
+
+        chs = [width]
+        for _ in range(depth):
+            chs.append(max(32, chs[-1] // 2))
+        self.up = nn.ModuleList([_UpBlock(chs[i], chs[i + 1], dropout=dropout) for i in range(depth)])
+        self.head = nn.Conv2d(chs[min(depth, len(chs) - 1)], self.num_classes, kernel_size=1)
+
+        self.skip_projs = nn.ModuleList()
+        skip_channels = list(skip_channels) if isinstance(skip_channels, (list, tuple)) else []
+        skip_channels = list(reversed(skip_channels))[:depth]
+        for i in range(depth):
+            out_ch = chs[i + 1]
+            if i < len(skip_channels) and skip_channels[i]:
+                self.skip_projs.append(nn.Conv2d(int(skip_channels[i]), int(out_ch), kernel_size=1, bias=False))
+            else:
+                self.skip_projs.append(nn.Identity())
+
+        self.skip_fuse = nn.ModuleList([_ConvBlock(chs[i + 1], chs[i + 1], dropout=dropout) for i in range(depth)])
+
+    def forward(self, x, original_size, skips=None):
+        target_h, target_w = int(original_size[0]), int(original_size[1])
+        h, w = int(x.shape[-2]), int(x.shape[-1])
+        ratio = max(target_h / max(1, h), target_w / max(1, w))
+        if ratio <= 1.0:
+            steps = 0
+        else:
+            steps = int(min(self.depth, max(0, math.ceil(math.log2(ratio)))))
+
+        x = self.stem(x)
+
+        skips = list(skips) if isinstance(skips, (list, tuple)) else []
+        skips = list(reversed(skips))[:steps]
+
+        for i in range(steps):
+            x = self.up[i](x)
+            if i < len(skips) and skips[i] is not None:
+                s = skips[i]
+                if (int(s.shape[-2]) != int(x.shape[-2])) or (int(s.shape[-1]) != int(x.shape[-1])):
+                    s = F.interpolate(s, size=(int(x.shape[-2]), int(x.shape[-1])), mode='bilinear', align_corners=False)
+                proj = self.skip_projs[i]
+                s = proj(s) if not isinstance(proj, nn.Identity) else s
+                x = x + s
+                x = self.skip_fuse[i](x)
+
+        x = self.head(x)
+        x = F.interpolate(x, size=(target_h, target_w), mode='bilinear', align_corners=False)
+        return x
+
+def build_decoder(decoder_cfg, hidden_dim, num_classes, skip_channels=None):
     cfg = decoder_cfg or {}
     decoder_type = str(cfg.get("type", "segmentation_head")).lower()
     dropout = float(cfg.get("dropout", 0.0))
+    use_skips = bool(cfg.get("use_skips", False))
     if decoder_type in {"unet", "strong_unet", "strong-unet", "unet_strong"}:
         width = int(cfg.get("unet_width", cfg.get("width", 256)))
         depth = int(cfg.get("unet_depth", cfg.get("depth", 4)))
+        if use_skips:
+            return StrongUNetDecoderWithSkips(
+                hidden_dim=hidden_dim,
+                num_classes=num_classes,
+                width=width,
+                depth=depth,
+                dropout=dropout,
+                skip_channels=skip_channels
+            )
         return StrongUNetDecoder(hidden_dim=hidden_dim, num_classes=num_classes, width=width, depth=depth, dropout=dropout)
     return SegmentationDecoder(hidden_dim=hidden_dim, num_classes=num_classes, dropout=dropout)

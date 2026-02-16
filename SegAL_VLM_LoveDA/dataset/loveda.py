@@ -203,11 +203,11 @@ class LoveDADataset(Dataset):
                 if isinstance(v, str) and v.strip():
                     ordered.append(v.strip())
             if len(ordered) == 6:
-                text_prompts = ["background"] + ordered
+                text_prompts = ["satellite aerial view background and other land cover"] + ordered
 
         if text_prompts is None:
             text_prompts = [
-                "background",
+                "satellite aerial view background and other land cover",
                 "buildings",
                 "roads",
                 "water bodies",

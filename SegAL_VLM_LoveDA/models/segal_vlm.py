@@ -49,10 +49,16 @@ class SegAL_VLM(nn.Module):
         
         # 4. Decoder
         decoder_cfg = config.get('decoder', {}) or {}
+        skip_channels = None
+        if hasattr(self.vision_encoder, "feature_info") and hasattr(self.vision_encoder.feature_info, "channels"):
+            chans = self.vision_encoder.feature_info.channels()
+            if isinstance(chans, (list, tuple)) and len(chans) > 1:
+                skip_channels = list(chans[:-1])
         self.decoder = build_decoder(
             decoder_cfg=decoder_cfg,
             hidden_dim=hidden_dim,
-            num_classes=int(decoder_cfg.get('num_classes', 7))
+            num_classes=int(decoder_cfg.get('num_classes', 7)),
+            skip_channels=skip_channels
         )
         
     def forward(self, images, text_prompts, guidance_prompts=None):
@@ -88,7 +94,11 @@ class SegAL_VLM(nn.Module):
         fused_feat_spatial = fused_feat.transpose(1, 2).view(B, -1, H_f, W_f)
         
         # --- Decoder ---
-        logits = self.decoder(fused_feat_spatial, (H, W))
+        skips = visual_features_list[:-1] if isinstance(visual_features_list, (list, tuple)) else None
+        try:
+            logits = self.decoder(fused_feat_spatial, (H, W), skips=skips)
+        except TypeError:
+            logits = self.decoder(fused_feat_spatial, (H, W))
         
         return {
             "logits": logits,

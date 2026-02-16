@@ -1,6 +1,6 @@
 active_learning:
-  stage_fractions: [0.10, 0.25, 0.40, 0.55, 0.70]
-  total_rounds: 5
+  stage_fractions: [0.10, 0.30, 0.50, 0.70, 0.85, 1.00]
+  total_rounds: 6
   budget_per_round: 0 # Ignored when stage_fractions is set
   
   strategy:
