@@ -156,11 +156,92 @@ class StrongUNetDecoderWithSkips(nn.Module):
         x = F.interpolate(x, size=(target_h, target_w), mode='bilinear', align_corners=False)
         return x
 
+class _ASPPConv(nn.Sequential):
+    def __init__(self, in_ch, out_ch, dilation):
+        super().__init__(
+            nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=dilation, dilation=dilation, bias=False),
+            nn.BatchNorm2d(out_ch),
+            nn.ReLU(inplace=True),
+        )
+
+class _ASPPPooling(nn.Module):
+    def __init__(self, in_ch, out_ch):
+        super().__init__()
+        self.pool = nn.AdaptiveAvgPool2d(1)
+        self.proj = nn.Sequential(
+            nn.Conv2d(in_ch, out_ch, kernel_size=1, bias=False),
+            nn.BatchNorm2d(out_ch),
+            nn.ReLU(inplace=True),
+        )
+
+    def forward(self, x):
+        size = x.shape[-2:]
+        x = self.pool(x)
+        x = self.proj(x)
+        return F.interpolate(x, size=size, mode='bilinear', align_corners=False)
+
+class ASPP(nn.Module):
+    def __init__(self, in_ch, out_ch, atrous_rates=(6, 12, 18), dropout=0.0):
+        super().__init__()
+        out_ch = int(out_ch)
+        self.branch1 = nn.Sequential(
+            nn.Conv2d(in_ch, out_ch, kernel_size=1, bias=False),
+            nn.BatchNorm2d(out_ch),
+            nn.ReLU(inplace=True),
+        )
+        self.branches = nn.ModuleList([_ASPPConv(in_ch, out_ch, d) for d in atrous_rates])
+        self.pool = _ASPPPooling(in_ch, out_ch)
+        proj_in = out_ch * (2 + len(atrous_rates))
+        self.project = nn.Sequential(
+            nn.Conv2d(proj_in, out_ch, kernel_size=1, bias=False),
+            nn.BatchNorm2d(out_ch),
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(float(dropout)) if float(dropout) > 0 else nn.Identity(),
+        )
+
+    def forward(self, x):
+        feats = [self.branch1(x)]
+        feats.extend([b(x) for b in self.branches])
+        feats.append(self.pool(x))
+        x = torch.cat(feats, dim=1)
+        return self.project(x)
+
+class DeepLabDecoder(nn.Module):
+    def __init__(self, hidden_dim, num_classes, aspp_out=256, atrous_rates=(6, 12, 18), dropout=0.1):
+        super().__init__()
+        self.aspp = ASPP(int(hidden_dim), int(aspp_out), atrous_rates=atrous_rates, dropout=float(dropout))
+        self.head = nn.Sequential(
+            nn.Conv2d(int(aspp_out), int(aspp_out), kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(int(aspp_out)),
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(float(dropout)) if float(dropout) > 0 else nn.Identity(),
+            nn.Conv2d(int(aspp_out), int(num_classes), kernel_size=1),
+        )
+
+    def forward(self, x, original_size, **kwargs):
+        x = self.aspp(x)
+        x = self.head(x)
+        return F.interpolate(x, size=original_size, mode='bilinear', align_corners=False)
+
 def build_decoder(decoder_cfg, hidden_dim, num_classes, skip_channels=None):
     cfg = decoder_cfg or {}
     decoder_type = str(cfg.get("type", "segmentation_head")).lower()
     dropout = float(cfg.get("dropout", 0.0))
     use_skips = bool(cfg.get("use_skips", False))
+    if decoder_type in {"deeplab", "deeplabv3", "deeplabv3plus", "deeplab_v3", "deeplab_v3_plus"}:
+        aspp_out = int(cfg.get("aspp_out", 256))
+        atrous_rates = cfg.get("atrous_rates", (6, 12, 18))
+        if isinstance(atrous_rates, (list, tuple)) and len(atrous_rates) > 0:
+            atrous_rates = tuple(int(x) for x in atrous_rates)
+        else:
+            atrous_rates = (6, 12, 18)
+        return DeepLabDecoder(
+            hidden_dim=hidden_dim,
+            num_classes=num_classes,
+            aspp_out=aspp_out,
+            atrous_rates=atrous_rates,
+            dropout=dropout
+        )
     if decoder_type in {"unet", "strong_unet", "strong-unet", "unet_strong"}:
         width = int(cfg.get("unet_width", cfg.get("width", 256)))
         depth = int(cfg.get("unet_depth", cfg.get("depth", 4)))

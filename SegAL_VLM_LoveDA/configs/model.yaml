@@ -1,11 +1,11 @@
 model:
   vision_encoder:
-    type: "vit_large_patch16_224"
+    type: "vit_base_patch16_224.dino"
     pretrained: true
     freeze_backbone: false
     unfreeze_last_n_blocks: 0
     drop_rate: 0.0
-    drop_path_rate: 0.3
+    drop_path_rate: 0.1
   
   text_encoder:
     type: "clip"
@@ -16,13 +16,12 @@ model:
     dropout: 0.1
     
   decoder:
-    type: "unet"
+    type: "deeplabv3"
     num_classes: 7
     hidden_dim: 768
-    dropout: 0.2
-    unet_width: 512
-    unet_depth: 5
-    use_skips: true
+    dropout: 0.1
+    aspp_out: 256
+    atrous_rates: [6, 12, 18]
     
   cross_attention:
     num_heads: 12

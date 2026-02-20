@@ -96,6 +96,7 @@ class ActiveLearningLoop:
         # Loss
         label_smoothing = float(self.train_config.get('training', {}).get('label_smoothing', 0.0))
         focal_gamma = float(self.train_config.get('training', {}).get('focal_gamma', 0.0))
+        dice_weight = float(self.train_config.get('training', {}).get('dice_weight', 1.0))
         class_weights = self.train_config.get('training', {}).get('class_weights', None)
         if isinstance(class_weights, (list, tuple)):
             class_weights = [float(x) for x in class_weights]
@@ -106,7 +107,8 @@ class ActiveLearningLoop:
             ignore_index=255,
             label_smoothing=label_smoothing,
             class_weights=class_weights,
-            focal_gamma=focal_gamma
+            focal_gamma=focal_gamma,
+            dice_weight=dice_weight
         ).to(self.device)
         
         # Components
@@ -554,6 +556,10 @@ class ActiveLearningLoop:
             return torch.optim.AdamW(params, lr=lr, weight_decay=weight_decay)
         if optim_type == 'adam':
             return torch.optim.Adam(params, lr=lr, weight_decay=weight_decay)
+        if optim_type == 'sgd':
+            momentum = float(optim_cfg.get('momentum', 0.9))
+            nesterov = bool(optim_cfg.get('nesterov', False))
+            return torch.optim.SGD(params, lr=lr, momentum=momentum, weight_decay=weight_decay, nesterov=nesterov)
         raise ValueError(f"Unsupported optimizer type: {optim_type}")
 
     def _build_scheduler(self, optimizer):
@@ -649,6 +655,7 @@ class ActiveLearningLoop:
             self._reload_pool_datasets()
         training_cfg = self.train_config.get('training', {})
         batch_size = int(training_cfg.get('batch_size', 4))
+        grad_accum_steps = int(training_cfg.get('grad_accum_steps', 1))
         num_workers = int(training_cfg.get('num_workers', 0))
         pin_memory = self.device.type == 'cuda'
         persistent_workers = num_workers > 0
@@ -708,7 +715,14 @@ class ActiveLearningLoop:
             print(f"--- Epoch {e+1}/{epochs} (Global: {self.global_epoch}) ---")
             
             # Train
-            train_loss, train_miou, train_pixel_acc = train_one_epoch(self.model, loader, optimizer, self.criterion, self.device)
+            train_loss, train_miou, train_pixel_acc = train_one_epoch(
+                self.model,
+                loader,
+                optimizer,
+                self.criterion,
+                self.device,
+                grad_accum_steps=grad_accum_steps
+            )
             print(f"Train Loss: {train_loss:.4f}, mIoU: {train_miou:.4f}, Acc: {train_pixel_acc:.4f}")
             
             # Validate

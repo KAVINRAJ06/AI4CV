@@ -3,10 +3,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class SegLoss(nn.Module):
-    def __init__(self, num_classes=7, ignore_index=255, label_smoothing=0.0, class_weights=None, focal_gamma=0.0):
+    def __init__(self, num_classes=7, ignore_index=255, label_smoothing=0.0, class_weights=None, focal_gamma=0.0, dice_weight=1.0):
         super().__init__()
         self.focal_gamma = float(focal_gamma) if focal_gamma is not None else 0.0
         self.label_smoothing = float(label_smoothing) if label_smoothing is not None else 0.0
+        self.dice_weight = float(dice_weight) if dice_weight is not None else 1.0
         if class_weights is not None:
             w = torch.as_tensor(class_weights, dtype=torch.float)
             if w.numel() != int(num_classes):
@@ -73,5 +74,7 @@ class SegLoss(nn.Module):
                 loss_ce = ce_map.mean() * 0.0
         else:
             loss_ce = self.ce(logits, target)
+        if self.dice_weight <= 0:
+            return loss_ce
         loss_dice = self.dice_loss(logits, target)
-        return loss_ce + loss_dice
+        return loss_ce + (self.dice_weight * loss_dice)

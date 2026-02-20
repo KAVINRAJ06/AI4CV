@@ -5,14 +5,26 @@ import timm
 class VisionEncoder(nn.Module):
     def __init__(self, model_name='vit_base_patch16_224', pretrained=True, freeze=False, drop_rate=0.0, drop_path_rate=0.0, unfreeze_last_n_blocks: int = 0):
         super().__init__()
-        self.model = timm.create_model(
-            model_name,
-            pretrained=pretrained,
-            features_only=True,
-            dynamic_img_size=True,
-            drop_rate=float(drop_rate),
-            drop_path_rate=float(drop_path_rate)
-        )
+        self.model_name = str(model_name)
+        try:
+            self.model = timm.create_model(
+                self.model_name,
+                pretrained=pretrained,
+                features_only=True,
+                dynamic_img_size=True,
+                drop_rate=float(drop_rate),
+                drop_path_rate=float(drop_path_rate)
+            )
+        except Exception:
+            fallback = self.model_name.split(".", 1)[0] if "." in self.model_name else self.model_name
+            self.model = timm.create_model(
+                fallback,
+                pretrained=pretrained,
+                features_only=True,
+                dynamic_img_size=True,
+                drop_rate=float(drop_rate),
+                drop_path_rate=float(drop_path_rate)
+            )
         self.feature_info = self.model.feature_info
         self.out_dim = int(self.feature_info.channels()[-1]) if hasattr(self.feature_info, "channels") else None
         
