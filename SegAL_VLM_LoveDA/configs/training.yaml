@@ -1,26 +1,25 @@
 training:
   batch_size: 2
   grad_accum_steps: 8
-  learning_rate: 1.0e-4
+  learning_rate: 5.0e-5
   weight_decay: 5.0e-4
   num_epochs: 20
   device: "cuda"
   num_workers: 2
   backbone_lr_mult: 0.1
-  freeze_backbone_epochs: 5
-  label_smoothing: 0.1
-  focal_gamma: 0.0
-  dice_weight: 0.0
-  class_weights: null
+  freeze_backbone_epochs: 0
+  label_smoothing: 0.0
+  focal_gamma: 2.0
+  dice_weight: 1.0
+  class_weights: [0.5, 1.2, 1.0, 1.2, 3.0, 1.5, 1.0]
   early_stopping:
-    patience: 10
+    patience: 5
     min_delta: 0.0
   optimizer:
-    type: "sgd"
-    momentum: 0.9
-    nesterov: false
+    type: "adamw"
   scheduler:
-    type: "none"
+    type: "cosine_annealing"
+    T_max: 20
     
   logging:
     use_wandb: false
