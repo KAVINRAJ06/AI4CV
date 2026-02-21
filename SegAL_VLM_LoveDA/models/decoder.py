@@ -158,19 +158,21 @@ class StrongUNetDecoderWithSkips(nn.Module):
 
 class _ASPPConv(nn.Sequential):
     def __init__(self, in_ch, out_ch, dilation):
+        out_ch = int(out_ch)
         super().__init__(
             nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=dilation, dilation=dilation, bias=False),
-            nn.BatchNorm2d(out_ch),
+            nn.GroupNorm(num_groups=(32 if out_ch % 32 == 0 else (16 if out_ch % 16 == 0 else (8 if out_ch % 8 == 0 else 1))), num_channels=out_ch),
             nn.ReLU(inplace=True),
         )
 
 class _ASPPPooling(nn.Module):
     def __init__(self, in_ch, out_ch):
         super().__init__()
+        out_ch = int(out_ch)
         self.pool = nn.AdaptiveAvgPool2d(1)
         self.proj = nn.Sequential(
             nn.Conv2d(in_ch, out_ch, kernel_size=1, bias=False),
-            nn.BatchNorm2d(out_ch),
+            nn.GroupNorm(num_groups=(32 if out_ch % 32 == 0 else (16 if out_ch % 16 == 0 else (8 if out_ch % 8 == 0 else 1))), num_channels=out_ch),
             nn.ReLU(inplace=True),
         )
 
@@ -186,7 +188,7 @@ class ASPP(nn.Module):
         out_ch = int(out_ch)
         self.branch1 = nn.Sequential(
             nn.Conv2d(in_ch, out_ch, kernel_size=1, bias=False),
-            nn.BatchNorm2d(out_ch),
+            nn.GroupNorm(num_groups=(32 if out_ch % 32 == 0 else (16 if out_ch % 16 == 0 else (8 if out_ch % 8 == 0 else 1))), num_channels=out_ch),
             nn.ReLU(inplace=True),
         )
         self.branches = nn.ModuleList([_ASPPConv(in_ch, out_ch, d) for d in atrous_rates])
@@ -194,7 +196,7 @@ class ASPP(nn.Module):
         proj_in = out_ch * (2 + len(atrous_rates))
         self.project = nn.Sequential(
             nn.Conv2d(proj_in, out_ch, kernel_size=1, bias=False),
-            nn.BatchNorm2d(out_ch),
+            nn.GroupNorm(num_groups=(32 if out_ch % 32 == 0 else (16 if out_ch % 16 == 0 else (8 if out_ch % 8 == 0 else 1))), num_channels=out_ch),
             nn.ReLU(inplace=True),
             nn.Dropout2d(float(dropout)) if float(dropout) > 0 else nn.Identity(),
         )
@@ -212,7 +214,7 @@ class DeepLabDecoder(nn.Module):
         self.aspp = ASPP(int(hidden_dim), int(aspp_out), atrous_rates=atrous_rates, dropout=float(dropout))
         self.head = nn.Sequential(
             nn.Conv2d(int(aspp_out), int(aspp_out), kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(int(aspp_out)),
+            nn.GroupNorm(num_groups=(32 if int(aspp_out) % 32 == 0 else (16 if int(aspp_out) % 16 == 0 else (8 if int(aspp_out) % 8 == 0 else 1))), num_channels=int(aspp_out)),
             nn.ReLU(inplace=True),
             nn.Dropout2d(float(dropout)) if float(dropout) > 0 else nn.Identity(),
             nn.Conv2d(int(aspp_out), int(num_classes), kernel_size=1),
