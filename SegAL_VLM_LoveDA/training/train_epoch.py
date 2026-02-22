@@ -1,12 +1,14 @@
 import torch
+import torch.nn.functional as F
 from tqdm import tqdm
 from training.metrics import Evaluator
 
-def train_one_epoch(model, loader, optimizer, criterion, device, num_classes=7, grad_accum_steps=1):
+def train_one_epoch(model, loader, optimizer, criterion, device, num_classes=7, grad_accum_steps=1, attn_supervision_weight=0.0):
     model.train()
     total_loss = 0
     evaluator = Evaluator(num_classes, device)
     grad_accum_steps = max(1, int(grad_accum_steps))
+    attn_supervision_weight = float(attn_supervision_weight) if attn_supervision_weight is not None else 0.0
     
     pbar = tqdm(loader, desc="Training")
     optimizer.zero_grad(set_to_none=True)
@@ -35,6 +37,25 @@ def train_one_epoch(model, loader, optimizer, criterion, device, num_classes=7, 
         logits = outputs['logits']
         
         loss = criterion(logits, masks)
+        if attn_supervision_weight > 0:
+            attn_weights = outputs.get("attn_weights", None)
+            feature_hw = outputs.get("feature_hw", None)
+            if attn_weights is not None and feature_hw is not None:
+                h_f, w_f = int(feature_hw[0]), int(feature_hw[1])
+                if h_f > 0 and w_f > 0:
+                    masks_ds = F.interpolate(
+                        masks.unsqueeze(1).float(),
+                        size=(h_f, w_f),
+                        mode="nearest"
+                    ).squeeze(1).long()
+                    attn = attn_weights.reshape(-1, attn_weights.shape[-1])
+                    tgt = masks_ds.reshape(-1)
+                    valid = tgt != 255
+                    if valid.any():
+                        tgt_v = tgt[valid].clamp(0, attn.shape[-1] - 1)
+                        p = attn[valid].gather(1, tgt_v.unsqueeze(1)).squeeze(1).clamp_min(1e-8)
+                        attn_loss = (-torch.log(p)).mean()
+                        loss = loss + (attn_supervision_weight * attn_loss)
         (loss / grad_accum_steps).backward()
         
         micro_step += 1

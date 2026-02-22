@@ -47,6 +47,10 @@ class ActiveLearningLoop:
             self.device = torch.device('cpu')
         else:
             self.device = torch.device(requested_device)
+
+        training_cfg = self.train_config.get('training', {}) or {}
+        self.augment = bool(training_cfg.get('augment', False))
+        self.attn_supervision_weight = float(training_cfg.get('attn_supervision_weight', 0.0) or 0.0)
         
         # Setup Transforms
         self.transform = transforms.Compose([
@@ -61,7 +65,7 @@ class ActiveLearningLoop:
             prompt_file='dataset/prompts.json',
             transform=self.transform,
             img_size=(512, 512),
-            augment=False
+            augment=self.augment
         )
         self.val_dataset = LoveDADataset(
             root_dir='data/LoveDA', 
@@ -202,7 +206,7 @@ class ActiveLearningLoop:
             transform=self.transform,
             img_size=(512, 512),
             require_mask=True,
-            augment=False
+            augment=self.augment
         )
         self.pool_unlabeled_infer_dataset = LoveDADataset(
             root_dir=self.pool_root,
@@ -220,7 +224,7 @@ class ActiveLearningLoop:
             transform=self.transform,
             img_size=(512, 512),
             require_mask=True,
-            augment=False
+            augment=self.augment
         )
         self._pool_unlabeled_path_to_index = {p: i for i, p in enumerate(getattr(self.pool_unlabeled_infer_dataset, "image_paths", []))}
 
@@ -721,7 +725,8 @@ class ActiveLearningLoop:
                 optimizer,
                 self.criterion,
                 self.device,
-                grad_accum_steps=grad_accum_steps
+                grad_accum_steps=grad_accum_steps,
+                attn_supervision_weight=self.attn_supervision_weight
             )
             print(f"Train Loss: {train_loss:.4f}, mIoU: {train_miou:.4f}, Acc: {train_pixel_acc:.4f}")
             
