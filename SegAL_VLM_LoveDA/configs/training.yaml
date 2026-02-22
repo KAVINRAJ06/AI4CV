@@ -3,6 +3,7 @@ training:
   grad_accum_steps: 8
   augment: true
   attn_supervision_weight: 0.05
+  attn_logits_weight: 0.5
   learning_rate: 5.0e-5
   weight_decay: 5.0e-4
   num_epochs: 20

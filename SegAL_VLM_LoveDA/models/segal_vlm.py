@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from .vision_encoder import VisionEncoder
 from .text_encoder import TextEncoder
 from .prompt_encoder import PromptEncoder
@@ -92,6 +93,15 @@ class SegAL_VLM(nn.Module):
         
         # Reshape back to spatial
         fused_feat_spatial = fused_feat.transpose(1, 2).view(B, -1, H_f, W_f)
+        attn_logits = None
+        if attn_weights is not None:
+            attn = attn_weights
+            if attn.dim() == 4:
+                attn = attn.mean(dim=1)
+            if attn.dim() == 3 and attn.shape[1] == int(H_f * W_f):
+                attn_spatial = attn.view(B, int(H_f), int(W_f), -1).permute(0, 3, 1, 2).contiguous()
+                attn_up = F.interpolate(attn_spatial, size=(int(H), int(W)), mode="bilinear", align_corners=False)
+                attn_logits = torch.log(attn_up.clamp_min(1e-8))
         
         # --- Decoder ---
         skips = visual_features_list[:-1] if isinstance(visual_features_list, (list, tuple)) else None
@@ -103,6 +113,7 @@ class SegAL_VLM(nn.Module):
         return {
             "logits": logits,
             "attn_weights": attn_weights,
+            "attn_logits": attn_logits,
             "visual_features": visual_feat,
             "feature_hw": (int(H_f), int(W_f)),
             "original_size": (int(H), int(W))

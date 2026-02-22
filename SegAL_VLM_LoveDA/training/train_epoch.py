@@ -3,12 +3,13 @@ import torch.nn.functional as F
 from tqdm import tqdm
 from training.metrics import Evaluator
 
-def train_one_epoch(model, loader, optimizer, criterion, device, num_classes=7, grad_accum_steps=1, attn_supervision_weight=0.0):
+def train_one_epoch(model, loader, optimizer, criterion, device, num_classes=7, grad_accum_steps=1, attn_supervision_weight=0.0, attn_logits_weight=0.0):
     model.train()
     total_loss = 0
     evaluator = Evaluator(num_classes, device)
     grad_accum_steps = max(1, int(grad_accum_steps))
     attn_supervision_weight = float(attn_supervision_weight) if attn_supervision_weight is not None else 0.0
+    attn_logits_weight = float(attn_logits_weight) if attn_logits_weight is not None else 0.0
     
     pbar = tqdm(loader, desc="Training")
     optimizer.zero_grad(set_to_none=True)
@@ -37,6 +38,10 @@ def train_one_epoch(model, loader, optimizer, criterion, device, num_classes=7, 
         logits = outputs['logits']
         
         loss = criterion(logits, masks)
+        if attn_logits_weight > 0:
+            attn_logits = outputs.get("attn_logits", None)
+            if attn_logits is not None and torch.is_tensor(attn_logits) and attn_logits.dim() == 4 and attn_logits.shape[1] == int(num_classes):
+                loss = loss + (attn_logits_weight * criterion(attn_logits, masks))
         if attn_supervision_weight > 0:
             attn_weights = outputs.get("attn_weights", None)
             feature_hw = outputs.get("feature_hw", None)

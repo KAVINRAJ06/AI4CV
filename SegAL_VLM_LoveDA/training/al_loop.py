@@ -51,6 +51,7 @@ class ActiveLearningLoop:
         training_cfg = self.train_config.get('training', {}) or {}
         self.augment = bool(training_cfg.get('augment', False))
         self.attn_supervision_weight = float(training_cfg.get('attn_supervision_weight', 0.0) or 0.0)
+        self.attn_logits_weight = float(training_cfg.get('attn_logits_weight', 0.0) or 0.0)
         
         # Setup Transforms
         self.transform = transforms.Compose([
@@ -726,7 +727,8 @@ class ActiveLearningLoop:
                 self.criterion,
                 self.device,
                 grad_accum_steps=grad_accum_steps,
-                attn_supervision_weight=self.attn_supervision_weight
+                attn_supervision_weight=self.attn_supervision_weight,
+                attn_logits_weight=self.attn_logits_weight
             )
             print(f"Train Loss: {train_loss:.4f}, mIoU: {train_miou:.4f}, Acc: {train_pixel_acc:.4f}")
             
